@@ -77,50 +77,56 @@ async function main() {
   for (const kpi of kpis) {
     const category = cats.find(c => c.name === kpi.category)
     if (category) {
-      await prisma.kpi.upsert({
-        where: { name: kpi.name },
-        update: { ...kpi, categoryId: category.id },
-        create: { ...kpi, categoryId: category.id },
-      })
+      const existing = await prisma.kpi.findFirst({ where: { name: kpi.name } })
+      const { category: _, ...kpiData } = kpi
+      const data = { ...kpiData, categoryId: category.id }
+      if (existing) {
+        await prisma.kpi.update({ where: { id: existing.id }, data })
+      } else {
+        await prisma.kpi.create({ data })
+      }
     }
   }
 
   // Create admin user
   const hashedPassword = await bcrypt.hash('ChangeMe123!', 10)
   
-  await prisma.user.upsert({
-    where: { email: 'admin@paramount.com' },
-    update: {},
-    create: {
-      email: 'admin@paramount.com',
-      name: 'GM Admin',
-      role: Role.GM,
-      hashedPassword,
-    },
-  })
+  const existingAdmin = await prisma.user.findUnique({ where: { email: 'admin@paramount.com' } })
+  if (!existingAdmin) {
+    await prisma.user.create({
+      data: {
+        email: 'admin@paramount.com',
+        name: 'GM Admin',
+        role: Role.GM,
+        hashedPassword,
+      },
+    })
+  }
 
   // Create sample AMs
-  const am1 = await prisma.user.upsert({
-    where: { email: 'am-vic@paramount.com' },
-    update: {},
-    create: {
-      email: 'am-vic@paramount.com',
-      name: 'Area Manager VIC',
-      role: Role.AREA_MANAGER,
-      hashedPassword: await bcrypt.hash('ChangeMe123!', 10),
-    },
-  })
+  let am1 = await prisma.user.findUnique({ where: { email: 'am-vic@paramount.com' } })
+  if (!am1) {
+    am1 = await prisma.user.create({
+      data: {
+        email: 'am-vic@paramount.com',
+        name: 'Area Manager VIC',
+        role: Role.AREA_MANAGER,
+        hashedPassword: await bcrypt.hash('ChangeMe123!', 10),
+      },
+    })
+  }
 
-  const am2 = await prisma.user.upsert({
-    where: { email: 'am-nsw@paramount.com' },
-    update: {},
-    create: {
-      email: 'am-nsw@paramount.com',
-      name: 'Area Manager NSW',
-      role: Role.AREA_MANAGER,
-      hashedPassword: await bcrypt.hash('ChangeMe123!', 10),
-    },
-  })
+  let am2 = await prisma.user.findUnique({ where: { email: 'am-nsw@paramount.com' } })
+  if (!am2) {
+    am2 = await prisma.user.create({
+      data: {
+        email: 'am-nsw@paramount.com',
+        name: 'Area Manager NSW',
+        role: Role.AREA_MANAGER,
+        hashedPassword: await bcrypt.hash('ChangeMe123!', 10),
+      },
+    })
+  }
 
   // Create sample stores
   const stores = [
@@ -135,11 +141,12 @@ async function main() {
   ]
 
   for (const store of stores) {
-    await prisma.store.upsert({
-      where: { name: store.name },
-      update: store,
-      create: store,
-    })
+    const existing = await prisma.store.findFirst({ where: { name: store.name } })
+    if (existing) {
+      await prisma.store.update({ where: { id: existing.id }, data: store })
+    } else {
+      await prisma.store.create({ data: store })
+    }
   }
 
   // Create sample suppliers for supplier scorecards
@@ -153,11 +160,12 @@ async function main() {
   ]
 
   for (const supplier of suppliers) {
-    await prisma.supplier.upsert({
-      where: { code: supplier.code },
-      update: supplier,
-      create: supplier,
-    })
+    const existing = await prisma.supplier.findUnique({ where: { code: supplier.code || undefined } })
+    if (existing) {
+      await prisma.supplier.update({ where: { id: existing.id }, data: supplier })
+    } else {
+      await prisma.supplier.create({ data: supplier })
+    }
   }
 
   // Create sample promotions
