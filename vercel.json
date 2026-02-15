@@ -4,6 +4,6 @@
       "NODE_OPTIONS": "--max-old-space-size=4096"
     }
   },
-  "installCommand": "npm ci --legacy-peer-deps",
+  "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs"
 }
