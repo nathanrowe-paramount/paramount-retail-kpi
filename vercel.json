@@ -1,0 +1,9 @@
+{
+  "build": {
+    "env": {
+      "NODE_OPTIONS": "--max-old-space-size=4096"
+    }
+  },
+  "installCommand": "npm ci --legacy-peer-deps",
+  "framework": "nextjs"
+}
