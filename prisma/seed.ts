@@ -17,11 +17,12 @@ async function main() {
   ]
 
   for (const cat of categories) {
-    await prisma.kpiCategory.upsert({
-      where: { name: cat.name },
-      update: cat,
-      create: cat,
-    })
+    const existing = await prisma.kpiCategory.findFirst({ where: { name: cat.name } })
+    if (existing) {
+      await prisma.kpiCategory.update({ where: { id: existing.id }, data: cat })
+    } else {
+      await prisma.kpiCategory.create({ data: cat })
+    }
   }
 
   const cats = await prisma.kpiCategory.findMany()
