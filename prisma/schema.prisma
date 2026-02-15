@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  image          String?
+  role           Role      @default(STORE_MANAGER)
+  hashedPassword String?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  stores        Store[]   @relation("AreaManagerStores")
+  manager       Manager?
+  targetsSet    Target[]  @relation("TargetSetBy")
+  actualsEntered Actual[] @relation("ActualEnteredBy")
+  reviews       MonthlyReview[] @relation("ReviewConductedBy")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Store {
+  id            String   @id @default(cuid())
+  name          String
+  state         String   // VIC or NSW
+  format        String   @default("standard") // flagship or standard
+  areaManagerId String
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  areaManager User            @relation("AreaManagerStores", fields: [areaManagerId], references: [id])
+  managers    Manager[]
+  targets     Target[]
+  reviews     MonthlyReview[]
+}
+
+model Manager {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  storeId   String
+  startDate DateTime @default(now())
+  active    Boolean  @default(true)
+
+  user  User  @relation(fields: [userId], references: [id])
+  store Store @relation(fields: [storeId], references: [id])
+}
+
+model KpiCategory {
+  id        String @id @default(cuid())
+  name      String
+  sortOrder Int    @default(0)
+  weight    Float  @default(0)
+  active    Boolean @default(true)
+  
+  kpis Kpi[]
+}
+
+model Kpi {
+  id           String      @id @default(cuid())
+  categoryId   String
+  name         String
+  description  String?
+  unit         String      // %, $, count, score
+  scoringType  ScoringType @default(NUMERIC)
+  targetDefault Float?
+  weight       Float       @default(1)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  
+  category KpiCategory @relation(fields: [categoryId], references: [id])
+  targets  Target[]
+  actuals  Actual[]
+}
+
+model Target {
+  id        String   @id @default(cuid())
+  storeId   String
+  kpiId     String
+  month     Int      // 1-12
+  year      Int
+  value     Float
+  notes     String?
+  setById   String
+  setAt     DateTime @default(now())
+  
+  store Store @relation(fields: [storeId], references: [id])
+  kpi   Kpi   @relation(fields: [kpiId], references: [id])
+  setBy User  @relation("TargetSetBy", fields: [setById], references: [id])
+  
+  @@unique([storeId, kpiId, month, year])
+}
+
+model Actual {
+  id          String   @id @default(cuid())
+  storeId     String
+  kpiId       String
+  month       Int
+  year        Int
+  value       Float
+  notes       String?
+  enteredById String
+  enteredAt   DateTime @default(now())
+  source      String   @default("manual") // manual, api, import
+  
+  kpi       Kpi  @relation(fields: [kpiId], references: [id])
+  enteredBy User @relation("ActualEnteredBy", fields: [enteredById], references: [id])
+  
+  @@unique([storeId, kpiId, month, year])
+}
+
+model MonthlyReview {
+  id                String       @id @default(cuid())
+  storeId           String
+  month             Int
+  year              Int
+  areaManagerId     String
+  
+  status            ReviewStatus @default(DRAFT)
+  preFillComplete   Boolean      @default(false)
+  siteVisitComplete Boolean      @default(false)
+  
+  overallScore      Float?
+  grade             Grade?
+  
+  createdAt         DateTime     @default(now())
+  submittedAt       DateTime?
+  meetingAt         DateTime?
+  acknowledgedAt    DateTime?
+  
+  preFillData       Json?        // Desk-based data
+  siteVisitData     Json?        // Mobile form data
+  amNotes           String?
+  smResponse        String?
+  
+  store             Store        @relation(fields: [storeId], references: [id])
+  areaManager       User         @relation("ReviewConductedBy", fields: [areaManagerId], references: [id])
+  photos            ReviewPhoto[]
+}
+
+model ReviewPhoto {
+  id          String    @id @default(cuid())
+  reviewId    String
+  kpiId       String?
+  url         String
+  caption     String?
+  photoType   PhotoType @default(GENERAL)
+  tags        String[]  // For filtering: ["promo", "display", "compliance", "planogram"]
+  supplierId  String?   // Link to supplier for supplier scorecards
+  metadata    Json?     // Flexible: { promoId, sku, location, etc. }
+  uploadedAt  DateTime  @default(now())
+  
+  review MonthlyReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  GM
+  OPS_MANAGER
+  AREA_MANAGER
+  STORE_MANAGER
+  READONLY
+}
+
+enum ScoringType {
+  NUMERIC
+  RAG
+  SCALE_1_5
+}
+
+enum ReviewStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+}
+
+enum Grade {
+  EXCEEDS
+  MEETS
+  BELOW
+}
+
+enum PhotoType {
+  GENERAL
+  PROMO_DISPLAY
+  PLANogram
+  COMPLIANCE
+  NPD
+  STOCK
+  CLEANLINESS
+  SIGNAGE
+  LOCAL_ENGAGEMENT
+  OTHER
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String
+  code        String?  @unique
+  contactEmail String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  promotions  Promotion[]
+  
+  @@map("suppliers")
+}
+
+model Promotion {
+  id          String   @id @default(cuid())
+  supplierId  String
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  skus        String[] // Product codes
+  displayRequirements String? // Text description
+  complianceTarget Float @default(95) // Target compliance %
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  
+  @@map("promotions")
+}
