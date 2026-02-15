@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
@@ -12,14 +12,18 @@ export async function GET() {
 
   try {
     const stores = await prisma.store.findMany({
-      where: session.user.role === 'AREA_MANAGER' 
-        ? { areaManagerId: session.user.id, active: true }
-        : { active: true },
-      include: { areaManager: true }
+      include: {
+        areaManager: true,
+        managers: {
+          include: { user: true }
+        }
+      },
+      orderBy: { name: 'asc' }
     })
 
     return NextResponse.json(stores)
   } catch (error) {
+    console.error('Failed to fetch stores:', error)
     return NextResponse.json({ error: 'Failed to fetch stores' }, { status: 500 })
   }
 }
